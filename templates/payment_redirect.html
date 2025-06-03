@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Перенаправление на оплату</title>
+</head>
+<body onload="document.forms[0].submit()">
+    <form method="POST" action="https://secure.wayforpay.com/checkout">
+        <input type="hidden" name="merchantAccount" value="{{ params['merchantAccount'] }}">
+        <input type="hidden" name="merchantDomainName" value="{{ params['merchantDomainName'] }}">
+        <input type="hidden" name="orderReference" value="{{ params['orderReference'] }}">
+        <input type="hidden" name="orderDate" value="{{ params['orderDate'] }}">
+        <input type="hidden" name="amount" value="{{ params['amount'] }}">
+        <input type="hidden" name="currency" value="{{ params['currency'] }}">
+        <input type="hidden" name="productName[]" value="{{ params['productName'][0] }}">
+        <input type="hidden" name="productCount[]" value="{{ params['productCount'][0] }}">
+        <input type="hidden" name="productPrice[]" value="{{ params['productPrice'][0] }}">
+        <input type="hidden" name="merchantSignature" value="{{ params['merchantSignature'] }}">
+        <input type="hidden" name="serviceUrl" value="https://www.upworkrevolution.com/thank-you">
+        <input type="hidden" name="returnUrl" value="https://www.upworkrevolution.com/thank-you">
+    </form>
+    <noscript>
+        <p>Если форма не отправилась автоматически, нажмите кнопку ниже.</p>
+            <form method="POST" action="https://secure.wayforpay.com/checkout">
+                <input type="hidden" name="merchantAccount" value="{{ params['merchantAccount'] }}">
+                <input type="hidden" name="merchantDomainName" value="{{ params['merchantDomainName'] }}">
+                <input type="hidden" name="orderReference" value="{{ params['orderReference'] }}">
+                <input type="hidden" name="orderDate" value="{{ params['orderDate'] }}">
+                <input type="hidden" name="amount" value="{{ params['amount'] }}">
+                <input type="hidden" name="currency" value="{{ params['currency'] }}">
+                <input type="hidden" name="productName[]" value="{{ params['productName'][0] }}">
+                <input type="hidden" name="productCount[]" value="{{ params['productCount'][0] }}">
+                <input type="hidden" name="productPrice[]" value="{{ params['productPrice'][0] }}">
+                <input type="hidden" name="merchantSignature" value="{{ params['merchantSignature'] }}">
+                <input type="hidden" name="serviceUrl" value="https://www.upworkrevolution.com/thank-you">
+                <input type="hidden" name="returnUrl" value="https://www.upworkrevolution.com/thank-you">
+            </form>
+    </noscript>
+</body>
+</html>
