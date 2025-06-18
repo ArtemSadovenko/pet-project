@@ -180,9 +180,30 @@ async def delete_order_by_order_reference(order_reference):
             await session.delete(order)
             await session.commit()
 
+async def select_all_users_with_expired_subs() -> list[Users]:
+    date = int(time.time()) - 30 * 86400  # 30 days
+    async with async_session() as session:
+        result = await session.execute(
+            select(Users).where(Users.last_date_of_payment < date)
+        )
+        return result.scalars().all()
 
 
-# Пример использования:
+async def update_user_last_payment_date(user_email, new_date):
+    async with async_session() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(Users).where(Users.email == user_email)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                user.last_date_of_payment = new_date
+                await session.commit()
+                return True
+            return False
+
+
+# Пример использования: 1749945537
 # Предположим, что где-то в вашем коде (например, в обработчике команды Discord бота)
 # вы генерируете order_id и join_link (с помощью discord.py) и получаете email и сумму.
 

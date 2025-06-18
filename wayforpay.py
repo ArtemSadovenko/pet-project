@@ -33,7 +33,6 @@ class InvoiceStatusResult:
         self.createdDate = createdDate
         self.processingDate = processingDate
         self.cardPan = cardPan
-        self.cardType = cardType
         self.issuerBankCountry = issuerBankCountry
         self.issuerBankName = issuerBankName
         self.transactionStatus = transactionStatus
@@ -64,7 +63,6 @@ class WayForPay:
     def create_invoice(self, merchantAccount, merchantAuthType, amount, currency, *args, **kwargs):
         orderReference = f"DH{randint(1000000000, 9999999999)}"
         orderDate = int(time.time())
-
         productNames = kwargs.get('productNames', [])
         productPrices = kwargs.get('productPrices', [])
         productCounts = kwargs.get('productCounts', [])
@@ -90,16 +88,21 @@ class WayForPay:
             "productName": productNames,
             "productPrice": productPrices,
             "productCount": productCounts,
+            "requiredRectoken": 1,
+            "allowRegular": True,
+            "regularMode": "monthly", 
+            "regularCount": 2,              # TODO change this
+            "regularBehavior": "preset"
         }
 
         try:
             result = requests.post(url=API_URL, json=params)
             response_dict = json.loads(result.text)
-            print("Ответ от WayForPay:", response_dict)
+            print("Response from WayForPay:", response_dict)
 
             if "invoiceUrl" not in response_dict:
-                print("Ошибка создания транзакции. Причина:", response_dict.get("reason"),
-                      "Код:", response_dict.get("reasonCode"))
+                print("Error creating transaction. Reason:", response_dict.get("reason"),
+                      "Code:", response_dict.get("reasonCode"))
                 return False
 
             invoice_url = response_dict["invoiceUrl"]
@@ -175,3 +178,118 @@ class WayForPay:
         except Exception as e:
             print(f'Error: {e}')
             return None
+
+    # def create_regular_payment(self, merchantAccount, merchantAuthType, amount, currency, recToken, *args, **kwargs):
+    #     try:
+    #         orderReference = f"DH{randint(1000000000, 9999999999)}"
+    #         orderDate = int(time.time())
+    
+    #         productNames = kwargs.get('productNames', [])
+    #         productPrices = kwargs.get('productPrices', [])
+    #         productCounts = kwargs.get('productCounts', [])
+    
+    #         product_names_data = ';'.join(map(str, productNames))
+    #         product_counts_data = ';'.join(map(str, productCounts))
+    #         product_prices_data = ';'.join(map(str, productPrices))
+    
+    #         string = f'{merchantAccount};{self.__domain_name};{orderReference};{orderDate};{amount};{currency};{product_names_data};{product_counts_data};{product_prices_data}'
+    
+    #         params = {
+    #             "transactionType": "CREATE_INVOICE",
+    #             "merchantSecretKey": self.__key,
+    #             "merchantAccount": merchantAccount,
+    #             "merchantAuthType": merchantAuthType,
+    #             "merchantDomainName": self.__domain_name,
+    #             "merchantSignature": self.hash_md5(string),
+    #             "apiVersion": "1",
+    #             "orderReference": orderReference,
+    #             "orderDate": orderDate,
+    #             "amount": amount,
+    #             "currency": currency,
+    #             "productName": productNames,
+    #             "productPrice": productPrices,
+    #             "productCount": productCounts,
+    #             "recToken": recToken
+    #         }
+    
+    #         result = requests.post(url=API_URL, json=params)
+    #         response_dict = json.loads(result.text)
+    #         print("Response from WayForPay:", response_dict)
+    
+    #         if response_dict.get("transactionStatus") != "Approved":
+    #             print("Error processing recurring payment. Reason:", response_dict.get("reason"),
+    #                   "Code:", response_dict.get("reasonCode"))
+    #             return False
+    
+    #         return InvoiceStatusResult(response_dict, response_dict.get("reason"), response_dict.get("reasonCode"),
+    #                                    orderReference, amount, currency, response_dict.get("authCode"),
+    #                                    response_dict.get("createdDate"), response_dict.get("processingDate"),
+    #                                    response_dict.get("cardPan"), response_dict.get("cardType"),
+    #                                    response_dict.get("issuerBankCountry"), response_dict.get("issuerBankName"),
+    #                                    response_dict.get("transactionStatus"), response_dict.get("refundAmount"),
+    #                                    response_dict.get("settlementDate"), response_dict.get("settlementAmount"),
+    #                                    response_dict.get("fee"), response_dict.get("merchantSignature"))
+    
+        # except Exception as e:
+        #     print(f'Error: {e}')
+        #     return None
+    
+    # def create_regular_invoice(self, merchantAccount, amount, currency, **kwargs):
+    #     try:
+    #         orderReference = f"DH{randint(1000000000, 9999999999)}"
+    #         orderDate = int(time.time())
+
+    #         productNames = kwargs.get('productNames', [])
+    #         productPrices = kwargs.get('productPrices', [])
+    #         productCounts = kwargs.get('productCounts', [])
+    
+    #         product_names_data = ';'.join(map(str, productNames))
+    #         product_counts_data = ';'.join(map(str, productCounts))
+    #         product_prices_data = ';'.join(map(str, productPrices))
+
+    #         parts = [
+    #                merchantAccount,
+    #                self.domain_name,
+    #                orderReference,
+    #                str(orderDate),
+    #                str(sum(productPrices)),  # amount
+    #                currency,
+    #                *productNames,
+    #                *map(str, productCounts),
+    #                *map(str, productPrices)
+    #            ]
+    #         data_to_sign = ';'.join(parts)
+
+    #         params = {
+    #             "transactionType": "CREATE_INVOICE",
+    #             "merchantAccount": merchantAccount,
+    #             "merchantDomainName": self.domain_name,
+    #             "merchantSignature": self.hash_md5(data_to_sign),
+    #             "apiVersion": "1",
+    #             "orderReference": orderReference,
+    #             "orderDate": orderDate,
+    #             "amount": "1",
+    #             "currency": currency,
+    #             "productName": product_names_data,
+    #             "productPrice": product_prices_data,
+    #             "productCount": product_counts_data,
+    #             "requiredRectoken": 1,
+    #             "allowRegular": true,
+    #             "regularMode": "monthly", 
+    #             "regularCount": 2,              # TODO change this
+    #             "regularBehavior": "preset"
+    #         }
+
+    
+    #         result = requests.post(url=API_URL, json=params)
+    #         response_dict = json.loads(result.text)
+    #         print("Response from WayForPay:", response_dict)
+    
+    #         if response_dict.get("reason") != "Ok":
+    #             print("Error processing recurring payment. Reason:", response_dict.get("reason"),
+    #                   "Code:", response_dict.get("reasonCode"))
+    #             return False
+
+    #     except Exception as e:
+    #         print(f'Error: {e}')
+    #         return None    

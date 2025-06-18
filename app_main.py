@@ -5,10 +5,10 @@ import discord
 import json
 from discord.ext import commands
 from flask import Flask, request, render_template, redirect, url_for
-from service_functions import add_new_order, add_order_reference_sql, update_order_status_sql, delete_order_sql
+from service_functions import add_new_order, add_order_reference_sql, update_order_status_sql, delete_order_sql, update_user_last_payment_date_sql
 from wayforpay import WayForPay
 from config import *
-
+from schedure import *
 
 app = Flask(__name__)
 
@@ -48,13 +48,9 @@ def payment():
         return redirect(url_for("index"))
 
     email = request.form.get("email")
-    amount_value = request.form.get('sub_price')
-    sub_time = request.form.get('sub_time')
-    # amount_value = '0.15'
-    # sub_time = 365
-
+    amount_value = COST_VALUE
+    sub_time = request.form.get('sub_time') or 365
     currency = "USD"
-
     sub_period = int(int(sub_time) / 30)
 
     if not email:
@@ -63,10 +59,9 @@ def payment():
         return response
 
     try:
-        future = asyncio.run_coroutine_threadsafe(generate_invite(), bot.loop)
-        invite_url = future.result(timeout=10)
+        invite_url = generate_invite()
 
-        order_id = asyncio.run(add_new_order(email, invite_url, amount_value, sub_time))
+        order_id = add_new_order(email, invite_url, amount_value, sub_time)
 
         merchant_domain = "upworkrevolution.com"
         wfp = WayForPay(MERCHANT_SECRET, merchant_domain)
@@ -80,12 +75,11 @@ def payment():
             productPrices=[amount_value],
             productCounts=[1],
             recurring="true",
-            subscriptionPeriod=f"{sub_period}"  # in month, 1 month, 12 month on sub period
+            subscriptionPeriod=f"{sub_period}"
         )
 
         order_reference = invoice_result.orderReference
-
-        asyncio.run(add_order_reference_sql(order_id, order_reference))
+        add_order_reference_sql(order_id, order_reference)
 
         if not invoice_result:
             raise Exception("Failed to create transaction via WayForPay")
@@ -103,17 +97,19 @@ def payment():
 def response():
     return "Payment completed. Thank you!"
 
-
+# http://upworkrevolution.com/callback_success
 @app.route("/callback_success", methods=["POST"])
 def callback_success():
     form_data = request.form
-
+    
     keys = list(form_data.keys())
+    json_str = ''
+    if keys:
+        json_str = keys[0]
     if not keys:
+        json_str = request.data
+    else:
         return "No data", 400
-
-    json_str = keys[0]
-
     try:
         parsed_data = json.loads(json_str)
     except Exception as e:
@@ -130,7 +126,9 @@ def callback_success():
 
         if not order_reference:
             return "orderReference not found", 400
-
+        user_email = parsed_data.get("email")
+        new_date = parsed_data.get("processingDate")
+        asyncio.run(update_user_last_payment_date_sql(user_email, new_date))
         asyncio.run(update_order_status_sql(order_reference, paid_order_status))
 
     return "OK", 200
@@ -150,19 +148,15 @@ def callback_failure():
 
     return "OK", 200
 
-
-def run_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    bot.run(bot_token)
-
 def run_scheduler():
     import schedure
     schedure.run_scheduler()
 
+def run_flask():
+    app.run(debug=True, use_reloader=False)
 
 if __name__ == '__main__':
-    threading.Thread(target=run_bot).start()
-    threading.Thread(target=run_scheduler).start()
-    app.run(debug=True)
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    run_bot() 
 

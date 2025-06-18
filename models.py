@@ -37,6 +37,7 @@ class Users(Base):
     discord_server_name = Column(String)
     discord_id = Column(Integer, unique=True)
     date_of_payment = Column(Integer)
+    last_date_of_payment = Column(Integer)
     sub_time = Column(Integer)
 
 

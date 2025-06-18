@@ -42,6 +42,11 @@ async def update_order_status_sql(order_reference, new_status):
     except Exception as e:
         print(f"Error in service_functions > update_order_status_sql: {e}")
 
+async def update_user_last_payment_date_sql(user_email, new_date):
+    try:
+        await update_user_last_payment_date(user_email, new_date)
+    except Exception as e:
+        print(f"Error in service_functions > update_user_last_payment_date: {e}")
 
 async def delete_order_sql(order_reference):
     try:

@@ -124,6 +124,14 @@ async def on_member_join(member):
         print(f"Не удалось определить, по какой ссылке присоединился {member.id}")
         await add_or_update_user('', '', discord_name, discord_server_name, discord_id, int(time.time()), 30)
 
+@bot.command()
+@commands.has_permissions(kick_members=True)
+async def kick(ctx, member: discord.Member, *, reason=None):
+    try:
+        await member.kick(reason=reason)
+        await ctx.send(f"{member.mention} был кикнут. Причина: {reason}")
+    except Exception as e:
+        await ctx.send(f"Не удалось кикнуть пользователя: {e}")
 
 if __name__ == "__main__":
     bot.run(bot_token)
