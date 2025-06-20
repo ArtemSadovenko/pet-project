@@ -8,9 +8,11 @@ from config import server_id, bot_token
 
 intents = discord.Intents.default()
 intents.members = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+intents.guilds = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-GUILD_ID = server_id
+
+GUILD_ID = int(server_id)
 
 async def kick_expired_users():
     users = await select_all_users_with_expired_subs()

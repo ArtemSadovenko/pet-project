@@ -41,7 +41,56 @@ async def generate_invite() -> str:
 def index():
     return render_template("index.html")
 
+@app.route("/payment_year", methods=["GET", "POST"])
+def payment_yearly():
+    if request.method == "GET":
+        return redirect(url_for("index"))
 
+    email = request.form.get("email")
+    amount_value = COST_VALUE_YEARLY
+    sub_time = request.form.get('sub_time') or 365
+    currency = "USD"
+    sub_period = int(int(sub_time) / 30)
+
+    if not email:
+        response = redirect(url_for("index"))
+        response.status_code = 400
+        return response
+
+    try:
+        invite_url = generate_invite()
+
+        order_id = add_new_order(email, invite_url, amount_value, sub_time)
+
+        merchant_domain = "upworkrevolution.com"
+        wfp = WayForPay(MERCHANT_SECRET, merchant_domain)
+
+        invoice_result = wfp.create_yearly_invoice(
+            merchantAccount=MERCHANT_ID,
+            merchantAuthType="SimpleSignature",
+            amount=amount_value,
+            currency=currency,
+            productNames=["Оплата доступу до закритого Discord-каналу Community Upwork Revolution"],
+            productPrices=[amount_value],
+            productCounts=[1],
+            recurring="true",
+            subscriptionPeriod=f"{sub_period}"
+        )
+
+        order_reference = invoice_result.orderReference
+        add_order_reference_sql(order_id, order_reference)
+
+        if not invoice_result:
+            raise Exception("Failed to create transaction via WayForPay")
+
+        return redirect(invoice_result.invoiceUrl)
+
+    except Exception as e:
+        print(f"Error creating order: {e}")
+        response = redirect(url_for("index"))
+        response.status_code = 501
+        return response
+    
 @app.route("/payment", methods=["GET", "POST"])
 def payment():
     if request.method == "GET":

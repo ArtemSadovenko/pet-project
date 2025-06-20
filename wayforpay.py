@@ -91,7 +91,7 @@ class WayForPay:
             "requiredRectoken": 1,
             "allowRegular": True,
             "regularMode": "monthly", 
-            "regularCount": 2,              # TODO change this
+            "regularCount": 60,              # TODO change this
             "regularBehavior": "preset"
         }
 
@@ -114,6 +114,59 @@ class WayForPay:
             print(f'Error: {e}')
             return False
 
+    def create_yearly_invoice(self, merchantAccount, merchantAuthType, amount, currency, *args, **kwargs):
+        orderReference = f"DH{randint(1000000000, 9999999999)}"
+        orderDate = int(time.time())
+        productNames = kwargs.get('productNames', [])
+        productPrices = kwargs.get('productPrices', [])
+        productCounts = kwargs.get('productCounts', [])
+
+        product_names_data = ';'.join(map(str, productNames))
+        product_counts_data = ';'.join(map(str, productCounts))
+        product_prices_data = ';'.join(map(str, productPrices))
+
+        string = f'{merchantAccount};{self.__domain_name};{orderReference};{orderDate};{amount};{currency};{product_names_data};{product_counts_data};{product_prices_data}'
+
+        params = {
+            "transactionType": "CREATE_INVOICE",
+            "merchantSecretKey": self.__key,
+            "merchantAccount": merchantAccount,
+            "merchantAuthType": merchantAuthType,
+            "merchantDomainName": self.__domain_name,
+            "merchantSignature": self.hash_md5(string),
+            "apiVersion": "1",
+            "orderReference": orderReference,
+            "orderDate": orderDate,
+            "amount": amount,
+            "currency": currency,
+            "productName": productNames,
+            "productPrice": productPrices,
+            "productCount": productCounts,
+            "requiredRectoken": 1,
+            "allowRegular": True,
+            "regularMode": "yearly", 
+            "regularCount": 5,              # TODO change this
+            "regularBehavior": "preset"
+        }
+
+        try:
+            result = requests.post(url=API_URL, json=params)
+            response_dict = json.loads(result.text)
+            print("Response from WayForPay:", response_dict)
+
+            if "invoiceUrl" not in response_dict:
+                print("Error creating transaction. Reason:", response_dict.get("reason"),
+                      "Code:", response_dict.get("reasonCode"))
+                return False
+
+            invoice_url = response_dict["invoiceUrl"]
+
+            return InvoiceCreateResult(invoice_url, response_dict.get("reason"), response_dict.get("reasonCode"),
+                                       response_dict.get("qrCode"), orderReference)
+
+        except Exception as e:
+            print(f'Error: {e}')
+            return False
 
     def check_invoice(self, merchantAccount, orderReference):
         apiVersion = '1'
