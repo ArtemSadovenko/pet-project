@@ -8,17 +8,15 @@ from flask import Flask, request, render_template, redirect, url_for
 from service_functions import add_new_order, add_order_reference_sql, update_order_status_sql, delete_order_sql, update_user_last_payment_date_sql
 from wayforpay import WayForPay
 from config import *
-from schedure import *
 
 app = Flask(__name__)
 
-
+# Main bot for invites and general functionality
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 guild_invites = {}
-
 
 async def generate_invite() -> str:
     await bot.wait_until_ready()
@@ -35,7 +33,6 @@ async def generate_invite() -> str:
         return invite.url
     except Exception as e:
         raise Exception(f"Error creating invite: {e}")
-
 
 @app.route("/", methods=["GET"])
 def index():
@@ -58,9 +55,14 @@ def payment_yearly():
         return response
 
     try:
-        invite_url = generate_invite()
+        future = asyncio.run_coroutine_threadsafe(generate_invite(), bot.loop)
+        invite_url = future.result(timeout=10)
 
-        order_id = add_new_order(email, invite_url, amount_value, sub_time)
+        future = asyncio.run_coroutine_threadsafe(
+            add_new_order(email, invite_url, amount_value, sub_time), 
+            bot.loop
+        )
+        order_id = future.result(timeout=10)
 
         merchant_domain = "upworkrevolution.com"
         wfp = WayForPay(MERCHANT_SECRET, merchant_domain)
@@ -78,7 +80,12 @@ def payment_yearly():
         )
 
         order_reference = invoice_result.orderReference
-        add_order_reference_sql(order_id, order_reference)
+        
+        future = asyncio.run_coroutine_threadsafe(
+            add_order_reference_sql(order_id, order_reference), 
+            bot.loop
+        )
+        future.result(timeout=10)
 
         if not invoice_result:
             raise Exception("Failed to create transaction via WayForPay")
@@ -86,7 +93,7 @@ def payment_yearly():
         return redirect(invoice_result.invoiceUrl)
 
     except Exception as e:
-        print(f"Error creating order: {e}")
+        print(f"Error creating yearly order: {e}")
         response = redirect(url_for("index"))
         response.status_code = 501
         return response
@@ -108,9 +115,14 @@ def payment():
         return response
 
     try:
-        invite_url = generate_invite()
+        future = asyncio.run_coroutine_threadsafe(generate_invite(), bot.loop)
+        invite_url = future.result(timeout=10)
 
-        order_id = add_new_order(email, invite_url, amount_value, sub_time)
+        future = asyncio.run_coroutine_threadsafe(
+            add_new_order(email, invite_url, amount_value, sub_time), 
+            bot.loop
+        )
+        order_id = future.result(timeout=10)
 
         merchant_domain = "upworkrevolution.com"
         wfp = WayForPay(MERCHANT_SECRET, merchant_domain)
@@ -128,7 +140,12 @@ def payment():
         )
 
         order_reference = invoice_result.orderReference
-        add_order_reference_sql(order_id, order_reference)
+        
+        future = asyncio.run_coroutine_threadsafe(
+            add_order_reference_sql(order_id, order_reference), 
+            bot.loop
+        )
+        future.result(timeout=10)
 
         if not invoice_result:
             raise Exception("Failed to create transaction via WayForPay")
@@ -141,52 +158,75 @@ def payment():
         response.status_code = 501
         return response
 
-
 @app.route("/response", methods=["GET", "POST"])
 def response():
     return "Payment completed. Thank you!"
 
-# http://upworkrevolution.com/callback_success
 @app.route("/callback_success", methods=["POST"])
 def callback_success():
     form_data = request.form
     
-    keys = list(form_data.keys())
     json_str = ''
+    keys = list(form_data.keys())
+    
     if keys:
         json_str = keys[0]
-    if not keys:
-        json_str = request.data
     else:
-        print(f"Unable to parce data: {form_data}")
-        return "No data", 400
+        # Try to get raw data
+        json_str = request.get_data(as_text=True)
+        if not json_str:
+            return "No data", 400
+
     try:
         parsed_data = json.loads(json_str)
     except Exception as e:
-        print(f"Ошибка парсинга JSON из form: {e}")
+        print(f"Error parsing JSON from callback: {e}")
+        print(f"Raw data received: {json_str}")
         return "Invalid JSON", 400
 
-    print("parsed_data:", parsed_data)
+    print("Callback success - parsed_data:", parsed_data)
+    
     tx_status = parsed_data.get('transactionStatus')
     if tx_status == "Declined":
+        print("Transaction declined")
         return "OK", 200
-    else:
-        order_reference = parsed_data.get("orderReference")
-        print("order_reference:", order_reference)
+    
+    order_reference = parsed_data.get("orderReference")
+    print("order_reference:", order_reference)
 
-        if not order_reference:
-            return "orderReference not found", 400
-        user_email = parsed_data.get("email")
-        new_date = parsed_data.get("processingDate")
-        asyncio.run(update_user_last_payment_date_sql(user_email, new_date))
-        asyncio.run(update_order_status_sql(order_reference, paid_order_status))
+    if not order_reference:
+        return "orderReference not found", 400
+        
+    user_email = parsed_data.get("email")
+    new_date = parsed_data.get("processingDate")
+    
+    try:
+        # Update user payment date if available
+        if user_email and new_date:
+            future = asyncio.run_coroutine_threadsafe(
+                update_user_last_payment_date_sql(user_email, new_date), 
+                bot.loop
+            )
+            result = future.result(timeout=10)
+            print(f"Updated payment date for {user_email}: {new_date}")
+        
+        # Update order status
+        future = asyncio.run_coroutine_threadsafe(
+            update_order_status_sql(order_reference, paid_order_status), 
+            bot.loop
+        )
+        result = future.result(timeout=10)
+        print(f"Updated order status for {order_reference}")
+        
+    except Exception as e:
+        print(f"Error updating database in callback_success: {e}")
+        return "Database error", 500
 
     return "OK", 200
 
-
 @app.route("/callback_failure", methods=["POST"])
 def callback_failure():
-    data = request.form or request.get_json()
+    data = request.form if request.form else request.get_json()
     if not data:
         return "No data", 400
 
@@ -194,20 +234,45 @@ def callback_failure():
     if not order_reference:
         return "orderReference not found", 400
 
-    asyncio.run(delete_order_sql(order_reference))
+    try:
+        future = asyncio.run_coroutine_threadsafe(
+            delete_order_sql(order_reference), 
+            bot.loop
+        )
+        future.result(timeout=10)
+        print(f"Deleted failed order: {order_reference}")
+    except Exception as e:
+        print(f"Error deleting order in callback_failure: {e}")
+        return "Database error", 500
 
     return "OK", 200
 
-def run_scheduler():
-    import schedure
-    schedure.run_scheduler()
+def run_bot():
+    """Run the main Discord bot"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        bot.run(bot_token)
+    except Exception as e:
+        print(f"Error running main bot: {e}")
 
 def run_flask():
-    app.run(host='0.0.0.0', port=5000)
-
+    """Run Flask application"""
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5000)
 
 if __name__ == '__main__':
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
-    run_bot() 
-
+    # Start the main bot in a separate thread
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    print("Main bot thread started")
+    
+    # Import and start scheduler
+    try:
+        from scheduler import run_scheduler
+        scheduler_thread = run_scheduler()
+        print("Scheduler started successfully")
+    except Exception as e:
+        print(f"Failed to start scheduler: {e}")
+    
+    # Run Flask in the main thread
+    run_flask()
