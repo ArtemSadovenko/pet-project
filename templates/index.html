@@ -205,8 +205,16 @@
       box-shadow: 0 12px 24px rgba(88, 101, 242, 0.3);
     }
 
-    .payment-button:active {
-      transform: translateY(0);
+    .payment-button:disabled {
+      background: #d1d5db;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .payment-button:disabled:hover {
+      transform: none;
+      box-shadow: none;
     }
 
     .payment-button::before {
@@ -289,7 +297,7 @@
         <input type="email" id="email" name="email" required placeholder="example@email.com">
       </div>
 
-      <button type="submit" class="payment-button" id="paymentButton">
+      <button type="submit" class="payment-button" id="paymentButton" disabled>
         Оплатить месячную подписку
       </button>
     </form>
@@ -307,22 +315,35 @@
     const cards = document.querySelectorAll('.pricing-card');
     const paymentButton = document.getElementById('paymentButton');
     const paymentForm = document.getElementById('paymentForm');
+    const emailInput = document.getElementById('email');
 
-    cards.forEach(card => {
-      card.addEventListener('click', () => {
-        // Remove selection from all cards
-        cards.forEach(c => c.classList.remove('selected'));
+    // Function to check if form is valid
+    function updateButtonState() {
+      const isEmailValid = emailInput.value.trim() !== '';
+      paymentButton.disabled = !isEmailValid;
+    }
+
+    // Listen for email input changes
+    emailInput.addEventListener('input', updateButtonState);
+    emailInput.addEventListener('blur', updateButtonState);
+
+    // cards.forEach(card => {
+    //   card.addEventListener('click', () => {
+    //     // Remove selection from all cards
+    //     cards.forEach(c => c.classList.remove('selected'));
         
-        // Add selection to clicked card
-        card.classList.add('selected');
-        selectedPlan = card.dataset.plan;
+    //     // Add selection to clicked card
+    //     card.classList.add('selected');
+    //     selectedPlan = card.dataset.plan;
         
-        // Update button text
-        const planName = selectedPlan === 'monthly' ? 'месячную подписку' : 'годовую подписку';
-        paymentButton.textContent = `Оплатить ${planName}`;
-        paymentButton.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-      });
-    });
+    //     // Update button text
+    //     const planName = selectedPlan === 'monthly' ? 'месячную подписку' : 'годовую подписку';
+    //     paymentButton.textContent = `Оплатить ${planName}`;
+    //     if (!paymentButton.disabled) {
+    //       paymentButton.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+    //     }
+    //   });
+    // });
 
     paymentForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -332,19 +353,24 @@
         return;
       }
       
-      const email = document.getElementById('email').value;
+      const email = emailInput.value;
+      
+      if (!email.trim()) {
+        alert('Пожалуйста, введите ваш email');
+        return;
+      }
       
       // Create a form and submit it
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = selectedPlan === 'monthly' ? '/payment' : '/payment_year';
       
-      const emailInput = document.createElement('input');
-      emailInput.type = 'hidden';
-      emailInput.name = 'email';
-      emailInput.value = email;
+      const emailHidden = document.createElement('input');
+      emailHidden.type = 'hidden';
+      emailHidden.name = 'email';
+      emailHidden.value = email;
       
-      form.appendChild(emailInput);
+      form.appendChild(emailHidden);
       document.body.appendChild(form);
       form.submit();
     });

@@ -158,6 +158,7 @@ def callback_success():
     if not keys:
         json_str = request.data
     else:
+        print(f"Unable to parce data: {form_data}")
         return "No data", 400
     try:
         parsed_data = json.loads(json_str)
@@ -202,7 +203,8 @@ def run_scheduler():
     schedure.run_scheduler()
 
 def run_flask():
-    app.run(debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000)
+
 
 if __name__ == '__main__':
     flask_thread = threading.Thread(target=run_flask)
