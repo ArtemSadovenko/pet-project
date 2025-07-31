@@ -266,13 +266,5 @@ if __name__ == '__main__':
     bot_thread.start()
     print("Main bot thread started")
     
-    # Import and start scheduler
-    try:
-        from scheduler import run_scheduler
-        scheduler_thread = run_scheduler()
-        print("Scheduler started successfully")
-    except Exception as e:
-        print(f"Failed to start scheduler: {e}")
-    
     # Run Flask in the main thread
     run_flask()
