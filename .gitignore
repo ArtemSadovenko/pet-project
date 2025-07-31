@@ -4,3 +4,6 @@ __pycache__/
 config.py
 database.db
 *logs*
+
+.bash_history
+invites_cache.json
