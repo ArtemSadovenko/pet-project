@@ -29,33 +29,6 @@ async def on_ready():
             print(f"Ошибка получения инвайтов для {guild.name}: {e}")
 
 
-# @bot.command()
-# async def gen_invite(ctx):
-#     try:
-#         server_id = ctx.guild.id
-#         invite_channel_id = ctx.channel.id
-#         # Логируем в консоли
-#         print(f"Команда вызвана на сервере: {server_id}, канал: {invite_channel_id}")
-#
-#         # Создаем инвайт-ссылку; max_uses=1 означает, что ссылка будет действительна для одного использования
-#         invite = await ctx.channel.create_invite(max_uses=1, unique=True)
-#
-#         # Обновляем локальное состояние инвайтов для этого сервера (в оперативном кэше)
-#         if server_id in guild_invites:
-#             guild_invites[server_id][invite.code] = invite.uses
-#         else:
-#             guild_invites[server_id] = {invite.code: invite.uses}
-#
-#         # Отправляем сообщение в чат с информацией о ссылке и ID
-#         await ctx.send(
-#             f"Одноразовая ссылка: {invite.url}\n"
-#             f"Server ID: {server_id}\n"
-#             f"Invite Channel ID: {invite_channel_id}"
-#         )
-#     except Exception as e:
-#         await ctx.send(f"Ошибка при создании инвайта: {e}")
-
-
 async def generate_invite() -> str:
     await bot.wait_until_ready()
 
@@ -90,7 +63,6 @@ async def on_member_join(member):
         print(f"Ошибка получения инвайтов для {guild.name}: {e}")
         return
 
-
     used_invite = None
     previous_invites = guild_invites.get(guild.id, {})
     for invite in current_invites:
@@ -99,30 +71,41 @@ async def on_member_join(member):
             used_invite = invite
             break
 
-
     guild_invites[guild.id] = {invite.code: invite.uses for invite in current_invites}
 
     discord_id = member.id
     discord_name = member.name
     discord_server_name = member.display_name
+    current_time = int(time.time())
 
     if used_invite:
         print(f"Пользователь {member} ({member.id}) присоединился по ссылке {used_invite.url}")
         discord_link = used_invite.url
 
-        order = await select_order_by_discord_link(discord_link)
+        try:
+            order = await select_order_by_discord_link(discord_link)
+            
+            if order:
+                email = order['email']
+                link = order['link']
+                sub_time = order['sub_time']
+                date_of_payment = order['order_date']
 
-        email = order['email']
-        link = order['link']
-        sub_time = order['sub_time']
-        date_of_payment = order['order_date']
-
-        await add_or_update_user(email, link, discord_id, date_of_payment, sub_time)
-
-        print(f"Обновлена запись пользователя {email} с Discord ID {member.id}")
+                # Add user with proper payment dates
+                await add_or_update_user(email, link, discord_name, discord_server_name, discord_id, date_of_payment, sub_time)
+                print(f"Обновлена запись пользователя {email} с Discord ID {member.id}")
+            else:
+                print(f"Заказ не найден для ссылки {discord_link}")
+                # Add user without payment (will be kicked later)
+                await add_or_update_user('', '', discord_name, discord_server_name, discord_id, current_time, 1)
+        except Exception as e:
+            print(f"Ошибка при обработке пользователя с инвайтом: {e}")
+            # Add user without payment as fallback
+            await add_or_update_user('', '', discord_name, discord_server_name, discord_id, current_time, 1)
     else:
         print(f"Не удалось определить, по какой ссылке присоединился {member.id}")
-        await add_or_update_user('', '', discord_name, discord_server_name, discord_id, int(time.time()), 30)
+        # Add user without payment (will be kicked after grace period)
+        await add_or_update_user('', '', discord_name, discord_server_name, discord_id, current_time, 1)
 
 @bot.command()
 @commands.has_permissions(kick_members=True)
@@ -135,4 +118,3 @@ async def kick(ctx, member: discord.Member, *, reason=None):
 
 if __name__ == "__main__":
     bot.run(bot_token)
-

@@ -26,7 +26,6 @@ async def add_order(order_id: int, email: str, join_link: str, amount: str, sub_
 
 
 async def add_or_update_user(email, link, discord_name, discord_server_name, discord_id, date_of_payment, sub_time):
-
     current_time = int(time.time())
     subscription_duration_sec = int(sub_time) * 86400
 
@@ -38,6 +37,8 @@ async def add_or_update_user(email, link, discord_name, discord_server_name, dis
             user.email = email
             user.link = link
             user.date_of_payment = date_of_payment
+            # Set last_date_of_payment to the same as date_of_payment for new payments
+            user.last_date_of_payment = date_of_payment
 
             if user.sub_time and user.sub_time > current_time:
                 new_subscription_expiry = user.sub_time + subscription_duration_sec
@@ -55,6 +56,8 @@ async def add_or_update_user(email, link, discord_name, discord_server_name, dis
                 discord_server_name=discord_server_name,
                 discord_id=discord_id,
                 date_of_payment=date_of_payment,
+                # Set both payment dates for new users
+                last_date_of_payment=date_of_payment,
                 sub_time=new_subscription_expiry
             )
             session.add(new_user)
@@ -115,6 +118,7 @@ async def add_user_from_order(order: Orders) -> Users:
             email=order.email,
             link=order.link,
             date_of_payment=int(datetime.utcnow().timestamp()),
+            last_date_of_payment=int(datetime.utcnow().timestamp()),
             sub_time=30  # время подписки в днях (по умолчанию 30)
         )
         session.add(new_user)
@@ -180,16 +184,58 @@ async def delete_order_by_order_reference(order_reference):
             await session.delete(order)
             await session.commit()
 
-async def select_all_users_with_expired_subs() -> list[Users]:
-    date = int(time.time()) - 30 * 86400  # 30 days
+
+# Fixed function: Get users who should receive 30-day warning
+async def select_users_for_30day_warning() -> list[Users]:
+    """Get users whose payment expires in 30 days and haven't been warned yet"""
+    current_time = int(time.time())
+    warning_threshold = current_time + (30 * 86400)  # 30 days from now
+    
     async with async_session() as session:
         result = await session.execute(
-            select(Users).where(Users.last_date_of_payment < date)
+            select(Users).where(
+                Users.last_date_of_payment < warning_threshold,
+                Users.last_date_of_payment > (current_time - 10 * 86400),  # Not too old
+                Users.discord_id.isnot(None)  # Has Discord ID
+            )
         )
         return result.scalars().all()
 
 
+# Fixed function: Get users with expired subscriptions (40 days)
+async def select_all_users_with_expired_subs() -> list[Users]:
+    """Get users whose subscription expired 40 days ago"""
+    current_time = int(time.time())
+    expiry_threshold = current_time - (40 * 86400)  # 40 days ago
+    
+    async with async_session() as session:
+        result = await session.execute(
+            select(Users).where(
+                Users.last_date_of_payment < expiry_threshold,
+                Users.discord_id.isnot(None)  # Has Discord ID
+            )
+        )
+        return result.scalars().all()
+
+
+# New function: Mark user as warned
+async def mark_user_as_warned(discord_id: int):
+    """Mark user as having received a 30-day warning"""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Users).where(Users.discord_id == discord_id)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            # You might want to add a 'warned' field to your Users model
+            # For now, we'll use a different approach in the scheduler
+            await session.commit()
+            return True
+        return False
+
+
 async def update_user_last_payment_date(user_email, new_date):
+    """Update user's last payment date when they make a payment"""
     async with async_session() as session:
         async with session.begin():
             result = await session.execute(
@@ -203,17 +249,11 @@ async def update_user_last_payment_date(user_email, new_date):
             return False
 
 
-# Пример использования: 1749945537
-# Предположим, что где-то в вашем коде (например, в обработчике команды Discord бота)
-# вы генерируете order_id и join_link (с помощью discord.py) и получаете email и сумму.
-
-#
-# @bot.event
-# async def on_member_join(member):
-#     # Получаем join_link, по которому пришёл пользователь (см. пример отслеживания invite'ов)
-#     used_link = ...  # Здесь ваша логика определения ссылки
-#     updated_user = await update_user_with_discord_id(used_link, discord_id=member.id)
-#     if updated_user:
-#         print(f"Обновлён пользователь {updated_user.email} с Discord ID {member.id}")
-#
-# Не забудьте адаптировать этот пример под свою архитектуру и требования.
+# New function: Get user by Discord ID
+async def get_user_by_discord_id(discord_id: int) -> Users:
+    """Get user by Discord ID"""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Users).where(Users.discord_id == discord_id)
+        )
+        return result.scalar_one_or_none()

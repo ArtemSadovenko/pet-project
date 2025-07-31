@@ -13,7 +13,6 @@ async def generate_unique_order_id(all_orders_id, length=10) -> str:
 
 async def add_new_order(email, join_link, amount, sub_time):
     try:
-
         all_orders_id = []
         all_orders_list = await select_orders()
 
@@ -42,14 +41,45 @@ async def update_order_status_sql(order_reference, new_status):
     except Exception as e:
         print(f"Error in service_functions > update_order_status_sql: {e}")
 
+
 async def update_user_last_payment_date_sql(user_email, new_date):
+    """Update user's last payment date and reset warning status"""
     try:
+        # Update payment date
         await update_user_last_payment_date(user_email, new_date)
+        
+        # Reset warning status when user makes a payment
+        await reset_user_warning_status(user_email)
+        
+        print(f"Updated payment date and reset warning for {user_email}")
     except Exception as e:
         print(f"Error in service_functions > update_user_last_payment_date: {e}")
+
 
 async def delete_order_sql(order_reference):
     try:
         await delete_order_by_order_reference(order_reference)
     except Exception as e:
         print(f"Error in service_functions > delete_order_sql: {e}")
+
+
+async def reset_user_warning_status(user_email):
+    """Reset user's warning status when they make a payment"""
+    try:
+        from sql_scripts import async_session
+        from models import Users
+        from sqlalchemy import select
+        
+        async with async_session() as session:
+            result = await session.execute(
+                select(Users).where(Users.email == user_email)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                user.warned_30_days = False
+                await session.commit()
+                return True
+            return False
+    except Exception as e:
+        print(f"Error resetting warning status for {user_email}: {e}")
+        return False
