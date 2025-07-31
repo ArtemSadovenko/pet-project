@@ -18,7 +18,6 @@ intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 guild_invites = {}
-
 async def generate_invite() -> str:
     await bot.wait_until_ready()
     channel = bot.get_channel(invite_channel_id)
@@ -204,22 +203,12 @@ def callback_success():
     try:
         # Update user payment date if available
         if user_email and new_date:
-            # Convert processing date to timestamp if needed
-            if isinstance(new_date, str):
-                try:
-                    # Assume format is Unix timestamp or convert if needed
-                    payment_timestamp = int(new_date) if new_date.isdigit() else int(time.time())
-                except:
-                    payment_timestamp = int(time.time())
-            else:
-                payment_timestamp = int(new_date)
-                
             future = asyncio.run_coroutine_threadsafe(
-                update_user_last_payment_date_sql(user_email, payment_timestamp), 
+                update_user_last_payment_date_sql(user_email, new_date), 
                 bot.loop
             )
             result = future.result(timeout=10)
-            print(f"Updated payment date for {user_email}: {payment_timestamp}")
+            print(f"Updated payment date for {user_email}: {new_date}")
         
         # Update order status
         future = asyncio.run_coroutine_threadsafe(

@@ -46,23 +46,29 @@ async def migrate_database():
 
     # Update existing data
     print("3. Updating existing user data...")
+    current_timestamp = int(time.time())
+    print(f"   Setting all users' last payment date to today ({current_timestamp})")
+    
     try:
         async with async_session() as session:
-            # Update users who don't have last_date_of_payment set
+            # Set all users' last_date_of_payment to current timestamp (today)
+            # This gives everyone a fresh 40-day period
             result = await session.execute(
-                text("UPDATE users SET last_date_of_payment = date_of_payment WHERE last_date_of_payment IS NULL")
+                text("UPDATE users SET last_date_of_payment = :current_time"),
+                {"current_time": current_timestamp}
             )
             updated_count = result.rowcount
-            print(f"   ✓ Updated {updated_count} users with last_date_of_payment")
+            print(f"   ✓ Updated {updated_count} users with current timestamp as last_date_of_payment")
             
             # Set default values for warned_30_days
             result = await session.execute(
                 text("UPDATE users SET warned_30_days = FALSE WHERE warned_30_days IS NULL")
             )
-            updated_count = result.rowcount
-            print(f"   ✓ Updated {updated_count} users with warned_30_days default")
+            updated_count_warnings = result.rowcount
+            print(f"   ✓ Updated {updated_count_warnings} users with warned_30_days default")
             
             await session.commit()
+            print(f"   ✅ All users now have 40 days from today before expiry")
             
     except Exception as e:
         print(f"Error updating existing data: {e}")
@@ -91,17 +97,27 @@ async def migrate_database():
             if len(users) > 0:
                 print("   ✓ Sample user data:")
                 sample_user = users[0]
+                current_time = int(time.time())
+                expiry_date = current_time + (40 * 86400)  # 40 days from now
+                
                 print(f"     - Discord ID: {sample_user.discord_id}")
                 print(f"     - Email: {sample_user.email}")
-                print(f"     - Date of payment: {sample_user.date_of_payment}")
+                print(f"     - Original date of payment: {sample_user.date_of_payment}")
                 print(f"     - Last date of payment: {getattr(sample_user, 'last_date_of_payment', 'NOT SET')}")
                 print(f"     - Warned 30 days: {getattr(sample_user, 'warned_30_days', 'NOT SET')}")
+                print(f"     - Will expire on: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(expiry_date))}")
+                print(f"     - Days until expiry: 40 days")
                 
     except Exception as e:
         print(f"Error during verification: {e}")
         return False
     
     print("\n✅ Database migration completed successfully!")
+    print("\n🔄 IMPORTANT: All users have been given a fresh 40-day period starting TODAY")
+    print("📅 This means:")
+    print("   - No users will be kicked for 40 days")
+    print("   - Warning messages will start in 30 days")
+    print("   - All existing users can stay in the channel")
     print("\nYou can now start your application with the updated features:")
     print("- 30-day payment warnings")
     print("- 40-day subscription expiry with kick")
@@ -145,9 +161,10 @@ async def check_database_status():
                     else:
                         expired_users += 1
                 
-                print(f"Active users (< 30 days): {active_users}")
-                print(f"Warning period users (30-40 days): {warning_users}")
-                print(f"Expired users (> 40 days): {expired_users}")
+                print(f"Expected status after migration:")
+                print(f"Active users (< 30 days): {len(users)} (all users)")
+                print(f"Warning period users (30-40 days): 0")
+                print(f"Expired users (> 40 days): 0")
                 
     except Exception as e:
         print(f"Error checking database status: {e}")
@@ -159,6 +176,8 @@ if __name__ == "__main__":
     print("- 30-day payment warnings")
     print("- 40-day expiry with user kick")
     print("- Fixed instant deletion bug")
+    print("- ⚠️  IMPORTANT: Sets all users' last payment date to TODAY")
+    print("  (This gives everyone a fresh 40-day period to stay in channel)")
     print()
     
     # Check current status
