@@ -25,7 +25,7 @@ async def send_mail(receiver_email: str, discord_link: str, order_reference: str
     body = (
         f"Привіт, {receiver_name}!\n\n"
         "Дякуємо за покупку доступу до community Upwork Revolution!\n"
-        "Ти щойно зробив(ла) крок, який може змінити твою фриланс-кар’єру та допоможе вийти на стабільний дохід на західному ринку.\n\n"
+        "Ти щойно зробив(ла) крок, який може змінити твою фриланс-кар'єру та допоможе вийти на стабільний дохід на західному ринку.\n\n"
         "📩 Ось запрошення на сервер:\n"
         f"🔗 Перейти в Discord: {discord_link}\n\n"
         "Побачимось всередині Upwork Revolution!\n\n"
@@ -46,40 +46,78 @@ async def send_mail(receiver_email: str, discord_link: str, order_reference: str
         server.starttls()
         server.ehlo()
         server.sendmail(sender_email, receiver_email, message.as_string())
-        print(f"The letter was successfully sent according to the order {order_reference}!")
+        print(f"✓ Email sent successfully for order {order_reference} to {receiver_email}")
     except Exception as e:
-        print(f"Error sending email to the order {order_reference}:", e)
+        print(f"❌ Error sending email for order {order_reference}: {e}")
     finally:
         if server is not None:
             server.quit()
 
 
 async def main():
-    print("WORKING")
+    """Main mail service loop"""
+    print("📧 Mail service started - monitoring for paid orders...")
+    
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+    
     while True:
         try:
             orders = await select_orders_with_paid_status()
-            print(orders)
+            
             if orders:
+                print(f"📬 Found {len(orders)} paid orders to process")
+                
                 for order in orders:
                     order_reference = order['order_reference']
                     receiver_email = order['email']
                     discord_link = order['link']
 
+                    # Try to update order status first (prevents duplicate emails)
                     updated = await update_order_status_by_order_reference_v2(order_reference, finished_order_status)
+                    
                     if updated:
                         await send_mail(receiver_email, discord_link, order_reference)
-                        print(f"Order {order_reference} updated and mail sent.")
+                        print(f"✓ Order {order_reference} processed and email sent")
                     else:
-                        print(f"Order {order_reference} was not updated (possibly already processed) - skipping.")
+                        print(f"⚠ Order {order_reference} was not updated (possibly already processed)")
+                        
+                # Reset error counter on successful processing
+                consecutive_errors = 0
+                
+            else:
+                # No orders to process - this is normal
+                pass
+                
         except Exception as e:
-            print(f"Error in main: {e}")
+            consecutive_errors += 1
+            print(f"❌ Error in mail service (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
+            
+            if consecutive_errors >= max_consecutive_errors:
+                print(f"💀 Mail service failed {max_consecutive_errors} times consecutively. Stopping.")
+                break
+                
+            # Wait longer after errors
+            await asyncio.sleep(10)
+            continue
+        
+        # Normal processing interval
         await asyncio.sleep(5)
 
 
-
-if __name__ == "__main__":
+def run_mail_service():
+    """Run mail service in a thread-safe way"""
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Mailing bot is off.")
+        print("📧 Mail service stopped by user")
+    except Exception as e:
+        print(f"💀 Mail service crashed: {e}")
+
+
+if __name__ == "__main__":
+    print("Starting mail service independently...")
+    try:
+        run_mail_service()
+    except KeyboardInterrupt:
+        print("Mail service stopped.")
